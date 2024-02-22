@@ -7,7 +7,6 @@ import org.junit.Test;
 import org.opcfoundation.ua.utils.CertificateUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.spongycastle.util.Arrays;
 
 public class CertTest {
 
@@ -54,9 +53,12 @@ public class CertTest {
 
 		byte[] data1 = cert.getEncoded();
 		byte[] data2 = cert2.getEncoded();
-		
+
 		// Sidenote, the 2 certs are not a chain, but this works for the purpose of this test
-		byte[] dataCombined = Arrays.concatenate(data1, data2);
+		byte[] dataCombined = new byte[data1.length + data2.length];
+
+		System.arraycopy(data1, 0, dataCombined, 0, data1.length);
+		System.arraycopy(data2, 0, dataCombined, data1.length, data2.length);
 
 		// if calculation is done correctly, the thumbprint of the combined
 		// should be the one of the first, i.e. data1

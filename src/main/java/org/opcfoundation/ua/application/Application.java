@@ -33,7 +33,6 @@ import org.opcfoundation.ua.core.StatusCodes;
 import org.opcfoundation.ua.encoding.EncoderContext;
 import org.opcfoundation.ua.transport.EndpointServer;
 import org.opcfoundation.ua.transport.UriUtil;
-import org.opcfoundation.ua.transport.https.HttpsServer;
 import org.opcfoundation.ua.transport.https.HttpsSettings;
 import org.opcfoundation.ua.transport.security.CertificateValidator;
 import org.opcfoundation.ua.transport.security.KeyPair;
@@ -64,8 +63,7 @@ public class Application {
 	HttpsSettings httpsSettings = new HttpsSettings();
 	/** OpcTcp Settings for OpcTcp Endpoint Servers */
 	OpcTcpSettings opctcpSettings = new OpcTcpSettings();
-	/** Https Server */
-	HttpsServer httpsServer;
+
 	/** OpcTcp Server */
 	OpcTcpServer opctcpServer;
 
@@ -124,27 +122,10 @@ public class Application {
 	 * @throws org.opcfoundation.ua.common.ServiceResultException if any.
 	 */
 	public synchronized EndpointServer getOrCreateEndpointServer(String scheme) throws ServiceResultException {
-		if ( scheme.equals( UriUtil.SCHEME_OPCTCP ) ) {
-			return getOrCreateOpcTcpServer();
-		} else 
-		if ( scheme.equals( UriUtil.SCHEME_HTTP ) || scheme.equals( UriUtil.SCHEME_HTTPS )) {
-			return getOrCreateHttpsServer();
-		} else throw new ServiceResultException(StatusCodes.Bad_UnexpectedError, "Cannot find EndpointServer for scheme "+scheme);
+		return getOrCreateOpcTcpServer();
 	}
-	
-	/**
-	 * <p>getOrCreateHttpsServer.</p>
-	 *
-	 * @return a {@link org.opcfoundation.ua.transport.https.HttpsServer} object.
-	 * @throws org.opcfoundation.ua.common.ServiceResultException if any.
-	 */
-	public synchronized HttpsServer getOrCreateHttpsServer() throws ServiceResultException {
-		if ( httpsServer == null ) {
-			httpsServer = new HttpsServer(this);
-		}
-		return httpsServer;
-	}
-	
+
+
 	/**
 	 * <p>getOrCreateOpcTcpServer.</p>
 	 *
@@ -372,10 +353,6 @@ public class Application {
 	 * <p>close.</p>
 	 */
 	public void close() {
-		if ( httpsServer !=null ) {
-			httpsServer.close();
-			httpsServer = null;
-		}
 		if ( opctcpServer != null ) {
 			opctcpServer.close();
 			opctcpServer = null;

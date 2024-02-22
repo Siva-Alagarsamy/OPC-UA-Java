@@ -40,7 +40,6 @@ import org.opcfoundation.ua.transport.security.BcCryptoProvider;
 import org.opcfoundation.ua.transport.security.BcJceCryptoProvider;
 import org.opcfoundation.ua.transport.security.CryptoProvider;
 import org.opcfoundation.ua.transport.security.KeyPair;
-import org.opcfoundation.ua.transport.security.ScCryptoProvider;
 import org.opcfoundation.ua.transport.security.SecurityAlgorithm;
 import org.opcfoundation.ua.transport.security.SecurityConfiguration;
 import org.opcfoundation.ua.transport.security.SecurityMode;
@@ -97,28 +96,6 @@ public class TestCrypto extends TestCase {
 		}
 	}
 	
-	public void testEncryptDecryptRsa15WithSc() throws Exception {
-		try {
-			clientCryptoProvider = new ScCryptoProvider();
-			serverCryptoProvider = new BcCryptoProvider();
-			_setupTest(SecurityMode.BASIC128RSA15_SIGN_ENCRYPT, 2048);
-			encryptDecryptAsymm();
-		} finally {
-			_tearDown();
-		}
-	}
-
-	public void testEncryptDecryptRsaOaepWithSc() throws Exception {
-		try {
-			clientCryptoProvider = new BcJceCryptoProvider();
-			serverCryptoProvider = new ScCryptoProvider();
-			_setupTest(SecurityMode.BASIC256_SIGN_ENCRYPT, 2048);
-			encryptDecryptAsymm();
-		} finally {
-			_tearDown();
-		}
-	}
-
     public void testEncryptDecryptAes128WithBc() throws Exception {
         try {
           // Sample values from: http://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-38a.pdf

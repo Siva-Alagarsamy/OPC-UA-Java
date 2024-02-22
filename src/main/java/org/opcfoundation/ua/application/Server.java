@@ -43,8 +43,6 @@ import org.opcfoundation.ua.transport.EndpointServer;
 import org.opcfoundation.ua.transport.EndpointServer.EndpointHandle;
 import org.opcfoundation.ua.transport.UriUtil;
 import org.opcfoundation.ua.transport.endpoint.EndpointBindingCollection;
-import org.opcfoundation.ua.transport.https.HttpsServer;
-import org.opcfoundation.ua.transport.https.HttpsServer.HttpsEndpointHandle;
 import org.opcfoundation.ua.transport.security.CertificateValidator;
 import org.opcfoundation.ua.transport.security.KeyPair;
 import org.opcfoundation.ua.transport.security.SecurityMode;
@@ -182,8 +180,7 @@ public class Server {
 	 * @see org.opcfoundation.ua.core.NodeManagementServiceSetHandler
 	 * @see org.opcfoundation.ua.core.SessionServiceSetHandler
 	 * @see org.opcfoundation.ua.core.SubscriptionServiceSetHandler
-	 * @see org.opcfoundation.ua.core.TestServiceSetHandler
-	 * <P>
+	 *
 	 * The <tt>serviceHandler</tt> may implement one or more methods.
 	 * In typical case service handler implements one service set, e.g.
 	 * {@link org.opcfoundation.ua.core.SessionServiceSetHandler}.
@@ -380,8 +377,8 @@ public class Server {
 		boundHandles.clear();
 		logger.info("Server {} closed", this);
 		OpcTcpServer opctcpServer = getApplication().opctcpServer;
-		HttpsServer httpsServer = getApplication().httpsServer;
-		if ((opctcpServer == null || opctcpServer.getEndpointBindings().isEmpty()) && (httpsServer == null || httpsServer.getEndpointBindings().isEmpty()))
+
+		if ((opctcpServer == null || opctcpServer.getEndpointBindings().isEmpty()) )
 			getApplication().close();
 	}
 	
@@ -461,19 +458,6 @@ public class Server {
 							OpcTcpEndpointHandle[] endpointhandles = socketHandle.endpointHandleSnapshot();
 							for(OpcTcpEndpointHandle eh : endpointhandles) {
 
-								requestAddressEndpoints.add(eh.endpointBinding().endpointAddress);
-							}
-						}
-					}
-				}
-
-				if(es instanceof HttpsServer) {
-					HttpsServer hs = (HttpsServer) es;
-					HttpsServer.SocketHandle[] sh = hs.socketHandleSnapshot();
-					for(HttpsServer.SocketHandle socketHandle : sh)  {
-						if(requestAddress.equals(socketHandle.getSocketAddress())) {
-							HttpsEndpointHandle[] endpointhandles = socketHandle.endpointHandleSnapshot();
-							for(HttpsEndpointHandle eh : endpointhandles) {
 								requestAddressEndpoints.add(eh.endpointBinding().endpointAddress);
 							}
 						}

@@ -17,13 +17,17 @@ import java.util.Arrays;
 
 import javax.net.ssl.SSLPeerUnverifiedException;
 
-import org.apache.http.HttpEntity;
-import org.apache.http.HttpHost;
-import org.apache.http.HttpResponse;
-import org.apache.http.client.ClientProtocolException;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.nio.entity.NByteArrayEntity;
-import org.apache.http.util.EntityUtils;
+import org.apache.hc.client5.http.ClientProtocolException;
+import org.apache.hc.client5.http.classic.methods.HttpPost;
+
+import org.apache.hc.client5.http.impl.classic.CloseableHttpResponse;
+import org.apache.hc.core5.http.ContentType;
+import org.apache.hc.core5.http.HttpEntity;
+import org.apache.hc.core5.http.HttpHost;
+import org.apache.hc.core5.http.ParseException;
+import org.apache.hc.core5.http.io.entity.ByteArrayEntity;
+import org.apache.hc.core5.http.io.entity.EntityUtils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.opcfoundation.ua.builtintypes.ServiceRequest;
@@ -44,7 +48,7 @@ import org.opcfoundation.ua.utils.SizeCalculationOutputStream;
 
 class HttpsClientPendingRequest implements Runnable {
 
-	private static Logger logger = LoggerFactory.getLogger(HttpsClientPendingRequest.class);
+	private static final Logger logger = LoggerFactory.getLogger(HttpsClientPendingRequest.class);
 	
 	// Client
 	HttpsClient httpsClient;
@@ -110,7 +114,7 @@ class HttpsClientPendingRequest implements Runnable {
 			String host = inetAddress.getHostName();
 			int port = inetAddress.getPort();
 			String scheme = UriUtil.getTransportProtocol( httpsClient.connectUrl );
-			HttpHost httpHost = new HttpHost(host, port, scheme);
+			HttpHost httpHost = new HttpHost(scheme, host, port);
 			String url = httpsClient.transportChannelSettings.getDescription().getEndpointUrl();
 			String endpointId = url == null ? "" : url; //UriUtil.getEndpointName(url);
 	    	httpPost = new HttpPost( endpointId );
@@ -137,7 +141,7 @@ class HttpsClientPendingRequest implements Runnable {
     		BinaryEncoder enc = new BinaryEncoder( data );
     		enc.setEncoderContext( httpsClient.encoderCtx );
     		enc.putMessage( requestMessage );
-    		httpPost.setEntity( new NByteArrayEntity(data) );
+    		httpPost.setEntity(new ByteArrayEntity(data, ContentType.APPLICATION_OCTET_STREAM));
     		
 			// Abort exit branch
 			if ( abortCode != null ) {
@@ -146,10 +150,15 @@ class HttpsClientPendingRequest implements Runnable {
 			}
 			
     		// Execute Post
-			
-	        HttpResponse httpResponse;
-			try {
-				httpResponse = httpsClient.httpclient.execute( httpHost, httpPost );
+
+			HttpEntity entity;
+			int statusCode;
+
+			try(CloseableHttpResponse httpResponse = httpsClient.httpclient.execute( httpHost, httpPost ))
+			{
+				entity = httpResponse.getEntity();
+				// Error response
+				statusCode = httpResponse.getCode();
 			} catch (SSLPeerUnverifiedException e) {
 				// Currently, TLS_1_2 is not supported by JSSE implementations, for some odd reason
 				// and it will give this exception when used.
@@ -158,10 +167,8 @@ class HttpsClientPendingRequest implements Runnable {
 						"Could not negotiate a TLS security cipher or the server did not provide a valid certificate."));
 				return;
 			}
-        	HttpEntity entity = httpResponse.getEntity();        	
-			
-	        // Error response
-	        int statusCode = httpResponse.getStatusLine().getStatusCode(); 
+
+
 	        if ( statusCode != 200 ) {
 	        	UnsignedInteger uacode = StatusCodes.Bad_UnknownResponse;
 	        	if ( statusCode == 501 ) uacode = StatusCodes.Bad_ServiceUnsupported;	        	
@@ -211,7 +218,7 @@ class HttpsClientPendingRequest implements Runnable {
 			} else {
 				result.setError( new ServiceResultException( StatusCodes.Bad_CommunicationError, e ) );
 			}
-		} catch (DecodingException e) {
+		} catch (DecodingException  | ParseException e) {
 			result.setError( new ServiceResultException( StatusCodes.Bad_DecodingError, e ) );
 		} catch (ServiceResultException e) {
 			result.setError( e );

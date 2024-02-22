@@ -12,7 +12,7 @@
 
 package org.opcfoundation.ua.transport;
 
-import org.apache.http.conn.ssl.X509HostnameVerifier;
+import org.apache.hc.client5.http.ssl.DefaultHostnameVerifier;
 import org.opcfoundation.ua.builtintypes.ByteString;
 import org.opcfoundation.ua.common.NamespaceTable;
 import org.opcfoundation.ua.common.RuntimeServiceResultException;
@@ -83,14 +83,14 @@ public class TransportChannelSettings implements Cloneable {
 	 * @throws org.opcfoundation.ua.common.RuntimeServiceResultException if any.
 	 * @param keypair a {@link org.opcfoundation.ua.transport.security.KeyPair} object.
 	 * @param certValidator a {@link org.opcfoundation.ua.transport.security.CertificateValidator} object.
-	 * @param hostnameVerifier a {@link org.apache.http.conn.ssl.X509HostnameVerifier} object.
+	 * @param hostnameVerifier a {@link org.apache.hc.client5.http.ssl.DefaultHostnameVerifier;} object.
 	 */
 	public TransportChannelSettings(
 			EndpointDescription description,
 			EndpointConfiguration configuration,
 			KeyPair keypair, 
 			CertificateValidator certValidator, 
-			X509HostnameVerifier hostnameVerifier
+			DefaultHostnameVerifier hostnameVerifier
 			) 
 	throws RuntimeServiceResultException {
 		super();

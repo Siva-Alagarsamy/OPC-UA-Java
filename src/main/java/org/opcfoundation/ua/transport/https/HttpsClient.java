@@ -11,50 +11,20 @@
 */
 package org.opcfoundation.ua.transport.https;
 
-import static org.opcfoundation.ua.core.StatusCodes.Bad_Timeout;
-
-import java.io.IOException;
-import java.nio.charset.Charset;
-import java.security.KeyManagementException;
-import java.security.NoSuchAlgorithmException;
-import java.security.cert.X509Certificate;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.EnumSet;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-import java.util.Timer;
-import java.util.TimerTask;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executor;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
-
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLEngine;
-import javax.net.ssl.SSLException;
-import javax.net.ssl.SSLSession;
-import javax.net.ssl.SSLSocket;
-
-import org.apache.http.auth.AuthScope;
-import org.apache.http.auth.UsernamePasswordCredentials;
-import org.apache.http.client.utils.URIUtils;
-import org.apache.http.conn.ClientConnectionManager;
-import org.apache.http.conn.scheme.PlainSocketFactory;
-import org.apache.http.conn.scheme.Scheme;
-import org.apache.http.conn.scheme.SchemeRegistry;
-import org.apache.http.conn.ssl.SSLSocketFactory;
-import org.apache.http.conn.ssl.X509HostnameVerifier;
-import org.apache.http.impl.client.BasicCredentialsProvider;
-import org.apache.http.impl.client.DefaultHttpClient;
-import org.apache.http.impl.conn.PoolingClientConnectionManager;
-import org.apache.http.params.BasicHttpParams;
-import org.apache.http.params.HttpConnectionParams;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.hc.client5.http.auth.AuthScope;
+import org.apache.hc.client5.http.auth.UsernamePasswordCredentials;
+import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.client5.http.impl.auth.BasicCredentialsProvider;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
+import org.apache.hc.client5.http.impl.classic.HttpClients;
+import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager;
+import org.apache.hc.client5.http.socket.ConnectionSocketFactory;
+import org.apache.hc.client5.http.socket.PlainConnectionSocketFactory;
+import org.apache.hc.client5.http.ssl.NoopHostnameVerifier;
+import org.apache.hc.client5.http.ssl.SSLConnectionSocketFactory;
+import org.apache.hc.core5.http.config.Registry;
+import org.apache.hc.core5.http.config.RegistryBuilder;
 import org.opcfoundation.ua.builtintypes.ServiceRequest;
 import org.opcfoundation.ua.builtintypes.ServiceResponse;
 import org.opcfoundation.ua.builtintypes.UnsignedInteger;
@@ -73,6 +43,24 @@ import org.opcfoundation.ua.utils.CryptoUtil;
 import org.opcfoundation.ua.utils.ObjectUtils;
 import org.opcfoundation.ua.utils.StackUtils;
 import org.opcfoundation.ua.utils.TimerUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLEngine;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.security.KeyManagementException;
+import java.security.NoSuchAlgorithmException;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+
+import static org.opcfoundation.ua.core.StatusCodes.Bad_Timeout;
 
 /**
  * Https Opc-Ua Client connection to an endpoint.
@@ -80,7 +68,7 @@ import org.opcfoundation.ua.utils.TimerUtil;
 public class HttpsClient implements ITransportChannel {
 
 	static final ServiceResultException BAD_TIMEOUT = new ServiceResultException( Bad_Timeout );
-	static final Charset UTF8 = Charset.forName("UTF-8");
+	static final Charset UTF8 = StandardCharsets.UTF_8;
 	
 	static final Logger logger = LoggerFactory.getLogger(HttpsClient.class);
 
@@ -96,15 +84,16 @@ public class HttpsClient implements ITransportChannel {
 	
 	/** Executor */
 	Executor executor = StackUtils.getBlockingWorkExecutor();
-	
+
 	/** http-code scheme registry */
-	SchemeRegistry sr;
+	Registry<ConnectionSocketFactory> sr;
+
 	/** Client connection manager */
-	ClientConnectionManager ccm;
+	PoolingHttpClientConnectionManager ccm;
 	/** Max connections */
 	int maxConnections = 20;
 	/** HttpClient */
-	DefaultHttpClient httpclient;		
+	CloseableHttpClient httpclient;
 	
     /** Protocol */
     String protocol;
@@ -154,9 +143,9 @@ public class HttpsClient implements ITransportChannel {
 	 * Set client connection manager. Call before #initialize.
 	 * If ClientConnectionManager is not set, a default implementation is used
 	 *
-	 * @param ccm a {@link org.apache.http.conn.ClientConnectionManager} object.
+	 * @param ccm a {@link PoolingHttpClientConnectionManager} object.
 	 */
-	public void setClientConnectionManager(ClientConnectionManager ccm)
+	public void setClientConnectionManager(PoolingHttpClientConnectionManager ccm)
 	{
 		this.ccm = ccm;
 	}
@@ -201,86 +190,99 @@ public class HttpsClient implements ITransportChannel {
 		
 		timer = TimerUtil.getTimer();
 		try {
-			SchemeRegistry sr = new SchemeRegistry();
+			Registry<ConnectionSocketFactory> sr;
 			if ( protocol.equals( UriUtil.SCHEME_HTTPS ) ) {
 		        
 			  SSLContext sslcontext;
-			  
-			  /*
-			   * Try first create tls 1.2 supporting context.
-			   * This should work at least on java 8 out of the box.
-			   * Might work on java 7 if tls 1.2 is enabled.
-			   */
-			  try{
-			    sslcontext = SSLContext.getInstance("TLSv1.2");
-			  }catch(NoSuchAlgorithmException noSuchAlgorithmException){
-			    //fallback option
-			    logger.debug("No TLSv1.2 implementation found, trying TLS");
-			    sslcontext = SSLContext.getInstance("TLS");
-			  }
-		       
+			  String[] supportedProtocols = { "TLSv1.1", "TLSv1.2", "TLSv1.3" };
+				try{
+					sslcontext = SSLContext.getInstance("TLSv1.3");
+				}catch(NoSuchAlgorithmException ex) {
+					/*
+					 * Try first create tls 1.2 supporting context.
+					 * This should work at least on java 8 out of the box.
+					 * Might work on java 7 if tls 1.2 is enabled.
+					 */
+					try {
+						supportedProtocols = new String[] { "TLSv1.1", "TLSv1.2" };
+						sslcontext = SSLContext.getInstance("TLSv1.2");
+					} catch (NoSuchAlgorithmException x) {
+						//fallback option
+						supportedProtocols = new String[] { "TLSv1.1"  };
+						logger.debug("No TLSv1.2 implementation found, trying TLS");
+						sslcontext = SSLContext.getInstance("TLSv1.1");
+					}
+				}
 		        
 		        sslcontext.init( httpsSettings.getKeyManagers(), httpsSettings.getTrustManagers(), null );
-				X509HostnameVerifier hostnameVerifier = httpsSettings.getHostnameVerifier() != null ? 
-						httpsSettings.getHostnameVerifier() : SSLSocketFactory.ALLOW_ALL_HOSTNAME_VERIFIER;
-				SSLSocketFactory sf = new SSLSocketFactory( sslcontext,	hostnameVerifier) {
-					protected void prepareSocket(javax.net.ssl.SSLSocket socket) throws IOException {
-						socket.setEnabledCipherSuites( cipherSuites );
-					};
-				};
-		        
+
+				HostnameVerifier hostnameVerifier = httpsSettings.getHostnameVerifier() != null ?
+						httpsSettings.getHostnameVerifier() : NoopHostnameVerifier.INSTANCE;
+
+
 				SSLEngine sslEngine = sslcontext.createSSLEngine();
 				String[] enabledCipherSuites = sslEngine.getEnabledCipherSuites();
 				
-				Set<String> policiesChiperSuitesCombinations = new HashSet<String>();
+				Set<String> policiesCipherSuitesCombinations = new HashSet<String>();
 				for(HttpsSecurityPolicy hsp : securityPolicies) {
-					for(String cipher : hsp.getCipherSuites()) {
-						policiesChiperSuitesCombinations.add(cipher);
-					}
+                    policiesCipherSuitesCombinations.addAll(Arrays.asList(hsp.getCipherSuites()));
 				}
 				
-				cipherSuites = CryptoUtil.filterCipherSuiteList(enabledCipherSuites, policiesChiperSuitesCombinations.toArray(new String[0]));
+				cipherSuites = CryptoUtil.filterCipherSuiteList(enabledCipherSuites, policiesCipherSuitesCombinations.toArray(new String[0]));
 				
 				logger.info( "Enabled protocols in SSL Engine are {}", Arrays.toString( sslEngine.getEnabledProtocols()));
 				logger.info( "Enabled CipherSuites in SSL Engine are {}", Arrays.toString( enabledCipherSuites ) );
 				logger.info( "Client CipherSuite selection for {} is {}", Arrays.toString(securityPolicies), Arrays.toString( cipherSuites ));
 
-				Scheme https = new Scheme(UriUtil.SCHEME_HTTPS, 443, sf);
-				sr.register(https);
+				SSLConnectionSocketFactory sf = new SSLConnectionSocketFactory(
+						sslcontext, supportedProtocols, cipherSuites, hostnameVerifier);
+
+				sr = RegistryBuilder.<ConnectionSocketFactory> create()
+						.register("https", sf)
+						.build();
+
 			}
-			
-			if ( protocol.equals( UriUtil.SCHEME_HTTP ) ) {
-				Scheme http = new Scheme("http", 80, PlainSocketFactory.getSocketFactory());
-				sr.register(http);
+			else {
+				sr = RegistryBuilder.<ConnectionSocketFactory> create()
+						.register("http", PlainConnectionSocketFactory.getSocketFactory())
+						.build();
 			}
 
+
+
 			if ( ccm == null ) {
-				PoolingClientConnectionManager pccm = new PoolingClientConnectionManager(sr);
-				ccm = pccm;
-				pccm.setMaxTotal( maxConnections );
-				pccm.setDefaultMaxPerRoute( maxConnections );
+				ccm = new PoolingHttpClientConnectionManager(sr);
+				ccm.setMaxTotal( maxConnections );
+				ccm.setDefaultMaxPerRoute( maxConnections );
 			}
-			BasicHttpParams httpParams = new BasicHttpParams();
-			HttpConnectionParams.setConnectionTimeout(httpParams, transportChannelSettings.getConfiguration().getOperationTimeout());
-			HttpConnectionParams.setSoTimeout(httpParams, 0);
-			httpclient = new DefaultHttpClient(ccm, httpParams);		
+
+			RequestConfig config = RequestConfig.custom()
+					.setConnectionRequestTimeout(transportChannelSettings.getConfiguration().getOperationTimeout(), TimeUnit.MILLISECONDS)
+					.setResponseTimeout(transportChannelSettings.getConfiguration().getOperationTimeout(), TimeUnit.MILLISECONDS)
+					.build();
+
+			HttpClientBuilder clientBuilder = HttpClients.custom()
+					.setConnectionManager(ccm)
+					.setDefaultRequestConfig(config);
+
+
 			
 			// Set username and password authentication
 			if ( httpsSettings.getUsername()!=null && httpsSettings.getPassword()!=null ) {
-				BasicCredentialsProvider credsProvider = new BasicCredentialsProvider();
-	        	credsProvider.setCredentials(
-	        	    new AuthScope(AuthScope.ANY_HOST, AuthScope.ANY_PORT),
-	        	    new UsernamePasswordCredentials(httpsSettings.getUsername(), httpsSettings.getPassword()));
-	        	httpclient.setCredentialsProvider( credsProvider );
+				BasicCredentialsProvider credentialsProvider = new BasicCredentialsProvider();
+				credentialsProvider.setCredentials(
+	        	    new AuthScope(null, -1),
+	        	    new UsernamePasswordCredentials(httpsSettings.getUsername(), httpsSettings.getPassword().toCharArray()));
+	        	clientBuilder.setDefaultCredentialsProvider(credentialsProvider);
 			}
 
-		} catch (NoSuchAlgorithmException e) {
-			new ServiceResultException( e );
-		} catch (KeyManagementException e) {
-			new ServiceResultException( e );
+			httpclient = clientBuilder.build();
+
+		} catch (NoSuchAlgorithmException | KeyManagementException e) {
+			throw new ServiceResultException( e );
 		}
-		
-	}
+
+    }
 	
 	long getTimeout(ServiceRequest serviceRequest) {
 		UnsignedInteger timeoutHint = serviceRequest.getRequestHeader() != null ? serviceRequest.getRequestHeader().getTimeoutHint() : null;
@@ -342,7 +344,7 @@ public class HttpsClient implements ITransportChannel {
 	 * <p>close.</p>
 	 */
 	public void close() {
-		ccm.shutdown();
+		ccm.close();
 				
 		// Cancel all pending requests
 		{
@@ -433,8 +435,7 @@ public class HttpsClient implements ITransportChannel {
 	 * Sets new Timer Task that timeouts pending requests.
 	 * If task already exists but is too far in the future, it is canceled and new task assigned
 	 */
-	private void scheduleTimeoutRequestsTimer()
-	{
+	private void scheduleTimeoutRequestsTimer()	{
 		HttpsClientPendingRequest nextRequest = _getNextTimeoutingPendingRequest();
 		
 		// Cancel task
@@ -491,8 +492,7 @@ public class HttpsClient implements ITransportChannel {
 	 * 
 	 * @return null or request
 	 */
-	private HttpsClientPendingRequest _getNextTimeoutingPendingRequest()
-	{
+	private HttpsClientPendingRequest _getNextTimeoutingPendingRequest() {
 		long next = Long.MAX_VALUE;
 		HttpsClientPendingRequest result = null;
 		synchronized (requests) {
@@ -506,14 +506,5 @@ public class HttpsClient implements ITransportChannel {
 		}
 		return result;
 	}
-	
-	/** Constant <code>ALLOW_ALL_HOSTNAME_VERIFIER</code> */
-	public final static X509HostnameVerifier ALLOW_ALL_HOSTNAME_VERIFIER = 
-			new X509HostnameVerifier() {
-		        public boolean verify(String arg0, SSLSession arg1) { return true; }
-		        public void verify(String arg0, String[] arg1, String[] arg2) throws SSLException {}
-		        public void verify(String arg0, X509Certificate arg1) throws SSLException {}
-		        public void verify(String arg0, SSLSocket arg1) throws IOException {}
-    		};		
-	
+
 }

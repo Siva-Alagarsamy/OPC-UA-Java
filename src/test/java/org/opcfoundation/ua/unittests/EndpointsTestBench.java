@@ -96,10 +96,6 @@ public abstract class EndpointsTestBench extends TestCase {
 				server.bind(bindAddress, endpointAddress, SecurityMode.NONE);
 				server.bind(bindAddress, endpointAddress, SecurityMode.BASIC128RSA15_SIGN_ENCRYPT);
 				server.bind(bindAddress, endpointAddress, SecurityMode.BASIC128RSA15_SIGN);
-				bindAddress = "opc.https://"+addr+":8443/UAExample";
-				endpointAddress = "opc.https://"+hostname+":8443/UAExample";
-				server.bind(bindAddress, endpointAddress, SecurityMode.NONE);
-				
 			}
 			//
 			else {
@@ -107,10 +103,6 @@ public abstract class EndpointsTestBench extends TestCase {
 				server.bind(bindAddress, endpointAddress, SecurityMode.BASIC128RSA15_SIGN_ENCRYPT);
 				server.bind(bindAddress, endpointAddress, SecurityMode.BASIC256_SIGN);
 				server.bind(bindAddress, endpointAddress, SecurityMode.BASIC256_SIGN_ENCRYPT);
-
-				bindAddress = "opc.https://"+addr+":8443/UAExample";
-				endpointAddress = "opc.https://"+hostname+":8443/UAExample";
-				server.bind(bindAddress, endpointAddress, SecurityMode.NONE);
 			}
 		}
 		

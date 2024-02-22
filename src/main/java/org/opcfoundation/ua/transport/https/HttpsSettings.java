@@ -28,8 +28,7 @@ import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509KeyManager;
 
-import org.apache.http.conn.ssl.X509HostnameVerifier;
-import org.apache.http.params.HttpParams;
+import org.apache.hc.client5.http.ssl.DefaultHostnameVerifier;
 import org.opcfoundation.ua.common.ServiceResultException;
 import org.opcfoundation.ua.transport.security.Cert;
 import org.opcfoundation.ua.transport.security.CertValidatorTrustManager;
@@ -50,33 +49,32 @@ public class HttpsSettings {
 	 * the server's X.509 certificate, once the connection has been established. 
 	 * This verification can provide additional guarantees of authenticity of 
 	 * the server trust material. */
-	X509HostnameVerifier hostnameVerifier;
+	DefaultHostnameVerifier hostnameVerifier;
 	/** Authentication info */ 
 	String username;
 	String password;
-	/** http params */
-	HttpParams httpParams;
+
 	private HttpsSecurityPolicy[] httpsSecurityPolicies;
 
 	public HttpsSettings() {
 		
 	}
 
-	public HttpsSettings(KeyPair keypair, CertificateValidator certValidator, X509HostnameVerifier hostnameVerifier) {
+	public HttpsSettings(KeyPair keypair, CertificateValidator certValidator, DefaultHostnameVerifier hostnameVerifier) {
 		super();
 		setKeyPair(keypair);
 		setCertificateValidator(certValidator);
 		this.hostnameVerifier = hostnameVerifier;
 	}
 	
-	public HttpsSettings(X509KeyManager keyManager, TrustManager trustManager, X509HostnameVerifier hostnameVerifier) {
+	public HttpsSettings(X509KeyManager keyManager, TrustManager trustManager, DefaultHostnameVerifier hostnameVerifier) {
 		super();
 		this.keyManager = keyManager;
 		this.trustManager = trustManager;
 		this.hostnameVerifier = hostnameVerifier;
 	}
 
-	public HttpsSettings(X509KeyManager keyManager, TrustManager trustManager, X509HostnameVerifier hostnameVerifier, String username, String password) {
+	public HttpsSettings(X509KeyManager keyManager, TrustManager trustManager, DefaultHostnameVerifier hostnameVerifier, String username, String password) {
 		super();
 		this.keyManager = keyManager;
 		this.trustManager = trustManager;
@@ -94,11 +92,11 @@ public class HttpsSettings {
 	 * 
 	 * @param hostnameVerifier
 	 */
-	public void setHostnameVerifier(X509HostnameVerifier hostnameVerifier) {
+	public void setHostnameVerifier(DefaultHostnameVerifier hostnameVerifier) {
 		this.hostnameVerifier = hostnameVerifier;
 	}
 
-	public X509HostnameVerifier getHostnameVerifier() {
+	public DefaultHostnameVerifier getHostnameVerifier() {
 		return hostnameVerifier;
 	}
 
@@ -128,20 +126,11 @@ public class HttpsSettings {
 			} catch (KeyStoreException e) {
 				// Expected if JKS is not available (e.g. in Android)
 				
-			} catch (NoSuchAlgorithmException e) {
-				// Unexpected
-				throw new RuntimeException(e);
-			} catch (CertificateException e) {
-				// Unexpected
-				throw new RuntimeException(e);
-			} catch (IOException e) {
-				// Unexpected
-				throw new RuntimeException(e);
-			} catch (ServiceResultException e) {
+			} catch (NoSuchAlgorithmException | CertificateException | IOException | ServiceResultException e) {
 				// Unexpected
 				throw new RuntimeException(e);
 			}
-	}
+    }
 
 	/**
 	 * Set keypairs to a https application. This replaces previous keyManager.
@@ -172,23 +161,12 @@ public class HttpsSettings {
 	        	keystore.setEntry(id, new TrustedCertificateEntry(caCerts[i].certificate), null);
 	        }
 	        setKeyStore( keystore, "" );        
-		} catch (KeyStoreException e) {
-			// Unexpected
-			throw new RuntimeException(e);
-		} catch (NoSuchAlgorithmException e) {
-			// Unexpected
-			throw new RuntimeException(e);
-		} catch (CertificateException e) {
-			// Unexpected
-			throw new RuntimeException(e);
-		} catch (IOException e) {
-			// Unexpected
-			throw new RuntimeException(e);
-		} catch (ServiceResultException e) {
+		} catch (KeyStoreException | NoSuchAlgorithmException | CertificateException | IOException |
+                 ServiceResultException e) {
 			// Unexpected
 			throw new RuntimeException(e);
 		}
-	}
+    }
 	
 	
 	/**
@@ -205,14 +183,10 @@ public class HttpsSettings {
 	        kmfactory.init(keystore, password.toCharArray());
 	        KeyManager kms[] = kmfactory.getKeyManagers();
 	        keyManager = kms.length==0 ? null : (X509KeyManager) kms[0];
-		} catch (NoSuchAlgorithmException e) {
-			throw new ServiceResultException( e );
-		} catch (UnrecoverableKeyException e) {
-			throw new ServiceResultException( e );
-		} catch (KeyStoreException e) {
+		} catch (NoSuchAlgorithmException | UnrecoverableKeyException | KeyStoreException e) {
 			throw new ServiceResultException( e );
 		}
-	}
+    }
 	
 	/**
 	 * Set keymanager for a https application.
@@ -287,13 +261,6 @@ public class HttpsSettings {
 	    return maxConnections;
 	}
 
-	public HttpParams getHttpParams() {
-		return httpParams;
-	}
-
-	public void setHttpParams(HttpParams httpParams) {
-		this.httpParams = httpParams;
-	}
 
 	public void setUsername(String username) {
 		this.username = username;
@@ -315,7 +282,6 @@ public class HttpsSettings {
 			username = src.username;
 			password = src.password;
 		}
-		if ( src.httpParams != null ) this.httpParams = src.httpParams;
 		if ( src.httpsSecurityPolicies != null ) this.httpsSecurityPolicies = src.httpsSecurityPolicies;
 	    this.maxConnections = src.maxConnections;
 	}
@@ -329,7 +295,6 @@ public class HttpsSettings {
 		result.keyManager = keyManager;
 		result.username = username;
 		result.password = password;
-		result.httpParams = httpParams;
 		result.httpsSecurityPolicies = httpsSecurityPolicies;
 		
 		return result;
